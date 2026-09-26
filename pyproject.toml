@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "handsfree"
+version = "0.1.0"
+description = "Touchless computer control with hand gestures"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-contrib-python>=4.9",
+    "mediapipe>=0.10.14",
+    "numpy>=1.26",
+    "pyautogui>=0.9.54",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+handsfree = "handsfree.app:main"
+
+[tool.setuptools.packages.find]
+include = ["handsfree*"]
+
+[tool.ruff]
+line-length = 100

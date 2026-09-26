@@ -1,0 +1,25 @@
+camera:
+  index: 1          # 0 = built-in camera on most Macs; the prototype used 1
+  width: 640
+  height: 480
+  mirror: true
+
+tracker:
+  model_path: models/hand_landmarker.task
+  num_hands: 1
+  min_detection_confidence: 0.8
+  min_tracking_confidence: 0.5
+
+mouse:
+  # Fraction of the frame cropped on each side; the inner box maps to the whole screen.
+  margin_x: 0.23
+  margin_y: 0.31
+  smoothing: 8      # Exponential smoothing divisor; larger = smoother but laggier
+
+gestures:
+  pinch_threshold_px: 50
+  click_cooldown_s: 0.2
+
+ui:
+  show_window: true
+  always_on_top: true

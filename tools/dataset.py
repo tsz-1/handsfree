@@ -3,6 +3,9 @@
   python tools/dataset.py list                          # samples per gesture in each session
   python tools/dataset.py drop SESSION --label rock     # remove one gesture from a session
   python tools/dataset.py drop SESSION                  # delete the whole session
+  python tools/dataset.py trim SESSION                  # drop transition frames at clip edges
+
+`trim` is for sessions recorded before tools/record.py trimmed clips itself; run it once.
 
 SESSION is a file name (e.g. 20260923-185506.npz) or its stem.
 """
@@ -59,6 +62,28 @@ def cmd_drop(args):
     print(f"Removed {removed} samples labeled {args.label} from {path.name}")
 
 
+def clip_keep_mask(t: np.ndarray, labels: np.ndarray, trim: float, gap: float = 0.5):
+    """Split samples into clips (label change or a time gap > `gap`) and drop `trim` seconds
+    at both ends of each clip, except for "none" where transitions are wanted."""
+    keep = np.ones(len(t), dtype=bool)
+    breaks = np.flatnonzero((labels[1:] != labels[:-1]) | (np.diff(t) > gap)) + 1
+    for seg in np.split(np.arange(len(t)), breaks):
+        if len(seg) == 0 or labels[seg[0]] == "none":
+            continue
+        ts = t[seg]
+        keep[seg] = (ts >= ts[0] + trim) & (ts <= ts[-1] - trim)
+    return keep
+
+
+def cmd_trim(args):
+    path = resolve(args.session)
+    data = dict(np.load(path))
+    keep = clip_keep_mask(data["timestamps"], data["labels"].astype(str), args.seconds)
+    removed = int((~keep).sum())
+    np.savez_compressed(path, **{k: v[keep] if k in PER_SAMPLE else v for k, v in data.items()})
+    print(f"Trimmed {removed} transition samples from {path.name}; {int(keep.sum())} left")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                      formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -69,6 +94,10 @@ def main():
     drop.add_argument("session")
     drop.add_argument("--label", nargs="+", help="Gesture(s) to remove; omit to delete the file")
     drop.set_defaults(fn=cmd_drop)
+    trim = sub.add_parser("trim", help="Drop pose-forming frames at clip edges (run once)")
+    trim.add_argument("session")
+    trim.add_argument("--seconds", type=float, default=0.3)
+    trim.set_defaults(fn=cmd_trim)
     args = parser.parse_args()
     args.fn(args)
 

@@ -1,8 +1,9 @@
 """Record labeled hand landmarks for training the gesture classifier.
 
 Keys (in the preview window):
-  0-9    start recording the gesture with that number
-  space  stop recording (the session is saved every time you stop)
+  0-9    start a clip of the gesture with that number; form the pose, then hold it
+         while moving the hand around (10-15 s per clip, 3-4 clips per gesture)
+  space  stop the clip (the session is saved every time you stop)
   u      undo: discard the clip being recorded, or the last one (repeatable)
   q      quit
 
@@ -53,7 +54,20 @@ def save(path: Path, samples: list[dict], frame_size: tuple[int, int]):
     print(f"Saved {len(samples)} samples to {path}")
 
 
-def draw(frame, hand, labels, counts, current, recording):
+def end_clip(samples: list[dict], start: int, t0: float, t1: float, trim: float):
+    """Drop the frames where the hand was still forming or leaving the pose.
+
+    Transitions are only unwanted in real gestures; for "none" they are useful negatives.
+    """
+    clip = samples[start:]
+    if not clip or clip[0]["label"] == "none" or trim <= 0:
+        return
+    kept = [s for s in clip if t0 + trim <= s["t"] <= t1 - trim]
+    samples[start:] = kept
+    print(f"Clip {clip[0]['label']}: kept {len(kept)}/{len(clip)} samples after trimming")
+
+
+def draw(frame, hand, labels, counts, current, recording, clip_s):
     h, w = frame.shape[:2]
     if hand is not None:
         pts = hand.pixels.astype(int)
@@ -70,7 +84,8 @@ def draw(frame, hand, labels, counts, current, recording):
 
     if recording:
         cv2.circle(frame, (25, 30), 10, (0, 0, 255), cv2.FILLED)
-        cv2.putText(frame, f"REC {current}", (45, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        cv2.putText(frame, f"REC {current} {clip_s:4.1f}s", (45, 38),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
         cv2.putText(frame, TIPS.get(current, ""), (20, h - 45),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
         cv2.putText(frame, "Vary angle, distance and position", (20, h - 20),
@@ -88,6 +103,8 @@ def main():
     parser.add_argument("--labels", nargs="+", default=DEFAULT_LABELS)
     parser.add_argument("--every", type=int, default=2,
                         help="Keep every Nth frame; consecutive frames are nearly identical")
+    parser.add_argument("--trim", type=float, default=0.3,
+                        help="Seconds dropped at the start and end of each clip (not for 'none')")
     args = parser.parse_args()
     if len(args.labels) > 10:
         parser.error("At most 10 labels (keys 0-9)")
@@ -101,7 +118,7 @@ def main():
     samples: list[dict] = []
     clip_starts: list[int] = []  # index in `samples` where each recorded clip begins
     counts: dict[str, int] = {}
-    current, recording, frame_i = args.labels[0], False, 0
+    current, recording, frame_i, clip_t0 = args.labels[0], False, 0, 0.0
     frame_size = (cfg.camera.width, cfg.camera.height)
     print(__doc__)
     try:
@@ -122,13 +139,15 @@ def main():
                                 "handedness": hand.handedness, "label": current, "t": now})
                 counts[current] = counts.get(current, 0) + 1
 
-            draw(frame, hand, args.labels, counts, current, recording)
+            draw(frame, hand, args.labels, counts, current, recording, now - clip_t0)
             cv2.imshow(WINDOW, frame)
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
             if key == ord(" ") and recording:
                 recording = False
+                end_clip(samples, clip_starts[-1], clip_t0, now, args.trim)
+                counts = collections.Counter(s["label"] for s in samples)
                 save(path, samples, frame_size)
             elif key == ord("u") and clip_starts:
                 start = clip_starts.pop()
@@ -139,9 +158,14 @@ def main():
                 print(f"Undo: discarded {dropped} samples")
                 save(path, samples, frame_size)
             elif ord("0") <= key <= ord("9") and key - ord("0") < len(args.labels):
-                current, recording = args.labels[key - ord("0")], True
+                if recording:
+                    end_clip(samples, clip_starts[-1], clip_t0, now, args.trim)
+                    counts = collections.Counter(s["label"] for s in samples)
+                current, recording, clip_t0 = args.labels[key - ord("0")], True, now
                 clip_starts.append(len(samples))
     finally:
+        if recording:
+            end_clip(samples, clip_starts[-1], clip_t0, time.perf_counter(), args.trim)
         save(path, samples, frame_size)
         cap.release()
         tracker.close()

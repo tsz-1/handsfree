@@ -32,6 +32,22 @@ def test_drop_label_keeps_other_samples(tmp_path):
     assert "fist 1" in run(tmp_path, "list")
 
 
+def test_trim_drops_clip_edges_but_not_none():
+    sys.path.insert(0, str(SCRIPT.parent))
+    from dataset import clip_keep_mask
+
+    # fist clip 0-2 s, then a 'none' clip, then another fist clip after a gap.
+    t = np.concatenate([np.arange(0, 2.01, 0.1), np.arange(2.1, 3.01, 0.1),
+                        np.arange(5, 6.01, 0.1)])
+    labels = np.array(["fist"] * 21 + ["none"] * 10 + ["fist"] * 11)
+    keep = clip_keep_mask(t, labels, trim=0.3)
+    assert keep[labels == "none"].all()
+    first = t[:21][keep[:21]]
+    assert first.min() >= 0.3 - 1e-9 and first.max() <= 1.7 + 1e-9
+    last = t[31:][keep[31:]]
+    assert last.min() >= 5.3 - 1e-9 and last.max() <= 5.7 + 1e-9
+
+
 def test_drop_session_deletes_file(tmp_path):
     path = make_session(tmp_path, ["fist"])
     run(tmp_path, "drop", "s1.npz")

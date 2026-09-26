@@ -75,7 +75,7 @@ def run(cfg: Config):
             now = time.perf_counter()
             hands = tracker.detect(frame, int(now * 1000))
             hand = hands[0] if hands else None
-            mouse.execute(gestures.update(hand, now))
+            mouse.execute(gestures.update(hand, now), now)
 
             dt = now - last_t
             last_t = now

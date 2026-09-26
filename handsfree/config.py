@@ -22,9 +22,13 @@ class TrackerConfig:
 
 @dataclass
 class MouseConfig:
-    margin_x: float = 0.23
-    margin_y: float = 0.31
-    smoothing: float = 8.0
+    margin_x: float = 0.15
+    margin_y: float = 0.20
+    min_cutoff: float = 0.5
+    beta: float = 0.005
+    d_cutoff: float = 1.0
+    click_rewind_s: float = 0.15
+    reset_after_s: float = 0.5
 
 
 @dataclass

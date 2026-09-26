@@ -12,9 +12,15 @@ tracker:
 
 mouse:
   # Fraction of the frame cropped on each side; the inner box maps to the whole screen.
-  margin_x: 0.23
-  margin_y: 0.31
-  smoothing: 8      # Exponential smoothing divisor; larger = smoother but laggier
+  # Equal gain on both axes (~3.8 screen px per camera px on a 640x480 feed).
+  margin_x: 0.15
+  margin_y: 0.20
+  # One Euro filter: lower min_cutoff = steadier when still; higher beta = less lag when moving fast.
+  min_cutoff: 0.5
+  beta: 0.005
+  d_cutoff: 1.0
+  click_rewind_s: 0.15   # Click where the cursor was this long ago, before the pinch pulled it
+  reset_after_s: 0.5     # Restart smoothing if the hand was lost for this long
 
 gestures:
   pinch_threshold_px: 50

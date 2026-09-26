@@ -43,6 +43,17 @@ class GestureConfig:
 
 
 @dataclass
+class ShortcutConfig:
+    enabled: bool = True
+    model_path: str = "models/gesture_classifier.joblib"
+    smoothing: float = 0.6
+    min_confidence: float = 0.8
+    hold_s: float = 0.4
+    cooldown_s: float = 1.0
+    bindings: dict = field(default_factory=dict)
+
+
+@dataclass
 class UIConfig:
     show_window: bool = True
     always_on_top: bool = True
@@ -54,6 +65,7 @@ class Config:
     tracker: TrackerConfig = field(default_factory=TrackerConfig)
     mouse: MouseConfig = field(default_factory=MouseConfig)
     gestures: GestureConfig = field(default_factory=GestureConfig)
+    shortcuts: ShortcutConfig = field(default_factory=ShortcutConfig)
     ui: UIConfig = field(default_factory=UIConfig)
 
 

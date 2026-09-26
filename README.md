@@ -24,6 +24,23 @@ On macOS, grant your terminal **Camera** and **Accessibility** permissions
 | Thumb–middle pinch | Right click |
 | Index + middle up, move hand up/down | Scroll (farther from start = faster) |
 
+### Gesture shortcuts
+
+A classifier trained on your own recordings recognizes static poses and maps them to actions
+(configurable in `config.yaml`):
+
+| Pose | Default action |
+| --- | --- |
+| Fist (hold) | Pause / resume control |
+| Thumbs up | Play / pause media |
+| Rock 🤘 | Screenshot |
+| Call 🤙 | Mission Control |
+
+```bash
+python tools/record.py   # record labeled poses (do at least two sessions)
+python tools/train.py    # compare models with leave-one-session-out CV, save the best
+```
+
 Press `q` in the preview window to quit. Settings live in `config.yaml`.
 Use `--dry-run` to see recognized gestures without controlling the mouse.
 See [docs/TUNING.zh-CN.md](docs/TUNING.zh-CN.md) for a tuning guide.

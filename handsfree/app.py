@@ -1,11 +1,14 @@
 import argparse
 import time
+from pathlib import Path
 
 import cv2
 
-from handsfree.actions import MouseController
+from handsfree.actions import MouseController, press_keys, press_media, validate_binding
+from handsfree.classifier import GestureClassifier
 from handsfree.config import Config, load_config
 from handsfree.gestures import GestureInterpreter, GestureState, Intent, IntentKind, Mode
+from handsfree.shortcuts import ShortcutEngine, ShortcutEvent
 from handsfree.tracker import (
     HAND_CONNECTIONS,
     INDEX_TIP,
@@ -17,7 +20,7 @@ from handsfree.tracker import (
 
 WINDOW = "HandsFree"
 MAGENTA, GREEN, WHITE = (255, 0, 255), (0, 255, 0), (255, 255, 255)
-YELLOW, GRAY = (0, 255, 255), (150, 150, 150)
+YELLOW, GRAY, RED = (0, 255, 255), (150, 150, 150), (0, 0, 255)
 
 
 def open_camera(cfg: Config, max_index: int = 4) -> cv2.VideoCapture:
@@ -93,6 +96,20 @@ def draw_overlay(frame, cfg: Config, hand: Hand | None, state: GestureState, fps
     cv2.putText(frame, f"FPS: {fps:.0f}", (20, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, GREEN, 2)
 
 
+def draw_shortcut_hud(frame, label: str | None, conf: float, progress: float, paused: bool):
+    h, w = frame.shape[:2]
+    if label is not None:
+        text = f"Gesture: {label} {conf:.2f}"
+        cv2.putText(frame, text, (w - 300, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, WHITE, 2)
+    if progress > 0:
+        x0, y0 = w - 300, h - 45
+        cv2.rectangle(frame, (x0, y0), (x0 + 200, y0 + 10), GRAY, 1)
+        cv2.rectangle(frame, (x0, y0), (x0 + int(200 * progress), y0 + 10), GREEN, cv2.FILLED)
+    if paused:
+        cv2.rectangle(frame, (0, 0), (w - 1, h - 1), RED, 6)
+        cv2.putText(frame, "PAUSED", (w // 2 - 70, h // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.3, RED, 3)
+
+
 def log_intents(intents: list[Intent], t: float):
     for intent in intents:
         if intent.kind is IntentKind.MOVE:
@@ -101,14 +118,48 @@ def log_intents(intents: list[Intent], t: float):
         print(f"[{t:9.3f}] {intent.kind.value}{extra}")
 
 
+def load_classifier(cfg: Config) -> GestureClassifier | None:
+    sc = cfg.shortcuts
+    if not sc.enabled:
+        return None
+    if not Path(sc.model_path).exists():
+        print(f"Gesture shortcuts off: no model at {sc.model_path} "
+              "(record data with tools/record.py, then run tools/train.py).")
+        return None
+    for gesture, binding in sc.bindings.items():
+        validate_binding(gesture, binding)
+    classifier = GestureClassifier(sc.model_path, sc.smoothing)
+    unknown = set(sc.bindings) - set(classifier.labels)
+    if unknown:
+        print(f"Warning: bindings for gestures the model doesn't know: {sorted(unknown)}")
+    return classifier
+
+
+def run_shortcut(event: ShortcutEvent, dry_run: bool, paused: bool) -> bool:
+    """Execute a shortcut; returns the new paused state."""
+    binding = event.binding
+    if binding.get("action") == "toggle_pause":
+        print("Control paused." if not paused else "Control resumed.")
+        return not paused
+    if not paused and not dry_run:
+        if "media" in binding:
+            press_media(binding["media"])
+        elif "keys" in binding:
+            press_keys(binding["keys"])
+    return paused
+
+
 def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
     cap = open_camera(cfg)
     tracker = HandTracker(cfg.tracker)
     gestures = GestureInterpreter(cfg.gestures)
     mouse = MouseController(cfg.mouse)
+    classifier = load_classifier(cfg)
+    shortcuts = ShortcutEngine(cfg.shortcuts)
 
     fps, last_t = 0.0, time.perf_counter()
     last_mode = Mode.IDLE
+    paused = False
     print("HandsFree running. Press 'q' in the preview window to quit.")
     if dry_run:
         print("Dry run: gestures are recognized but the mouse is not controlled.")
@@ -126,12 +177,25 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
             hands = tracker.detect(frame, int(now * 1000))
             hand = hands[0] if hands else None
             intents = gestures.update(hand, now)
+
+            label, conf = classifier.predict(hand) if classifier else (None, 0.0)
+            # Shortcut poses only count while no mouse gesture is in progress.
+            if gestures.state.mode is not Mode.IDLE:
+                label, conf = None, 0.0
+            events = shortcuts.update(label, conf, now)
+            if shortcuts.candidate is not None:
+                intents = [i for i in intents if i.kind is not IntentKind.MOVE]
+
             if verbose:
                 if gestures.state.mode is not last_mode:
                     last_mode = gestures.state.mode
                     print(f"[{now:9.3f}] -> {last_mode.value}")
                 log_intents(intents, now)
-            if not dry_run:
+                for event in events:
+                    print(f"[{now:9.3f}] shortcut {event.gesture}: {event.binding}")
+            for event in events:
+                paused = run_shortcut(event, dry_run, paused)
+            if not dry_run and not paused:
                 mouse.execute(intents, now)
 
             dt = now - last_t
@@ -141,6 +205,7 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
 
             if cfg.ui.show_window:
                 draw_overlay(frame, cfg, hand, gestures.state, fps)
+                draw_shortcut_hud(frame, label, conf, shortcuts.progress(now), paused)
                 cv2.imshow(WINDOW, frame)
                 if cfg.ui.always_on_top:
                     cv2.setWindowProperty(WINDOW, cv2.WND_PROP_TOPMOST, 1)

@@ -1,3 +1,4 @@
+import sys
 from collections import deque
 
 import numpy as np
@@ -11,6 +12,45 @@ pyautogui.PAUSE = 0
 pyautogui.FAILSAFE = False
 
 HISTORY_S = 1.0
+
+# pyautogui's public press() silently ignores these on macOS; its keyboard map lacks them.
+MEDIA_KEYS = {
+    "play": "KEYTYPE_PLAY",
+    "next": "KEYTYPE_NEXT",
+    "previous": "KEYTYPE_PREVIOUS",
+    "mute": "KEYTYPE_MUTE",
+    "volume_up": "KEYTYPE_SOUND_UP",
+    "volume_down": "KEYTYPE_SOUND_DOWN",
+}
+ACTIONS = {"toggle_pause"}
+
+
+def validate_binding(gesture: str, binding: dict):
+    kinds = [k for k in ("action", "media", "keys") if k in binding]
+    if len(kinds) != 1 or len(binding) != 1:
+        raise ValueError(f"Binding for {gesture!r} needs exactly one of action/media/keys")
+    if "action" in binding and binding["action"] not in ACTIONS:
+        raise ValueError(f"Unknown action {binding['action']!r} for {gesture!r}")
+    if "media" in binding and binding["media"] not in MEDIA_KEYS:
+        raise ValueError(f"Unknown media key {binding['media']!r} for {gesture!r}")
+    if "keys" in binding:
+        bad = [k for k in binding["keys"] if str(k) not in pyautogui.KEYBOARD_KEYS]
+        if bad:
+            raise ValueError(f"Unknown keys {bad} for {gesture!r}")
+
+
+def press_keys(keys: list):
+    pyautogui.hotkey(*[str(k) for k in keys])
+
+
+def press_media(name: str):
+    if sys.platform != "darwin":
+        raise NotImplementedError("Media keys are only implemented for macOS")
+    from pyautogui import _pyautogui_osx
+
+    key = MEDIA_KEYS[name]
+    _pyautogui_osx._specialKeyEvent(key, "down")
+    _pyautogui_osx._specialKeyEvent(key, "up")
 
 
 class MouseController:

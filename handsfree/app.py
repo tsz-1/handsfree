@@ -8,7 +8,8 @@ from handsfree.actions import MouseController, press_keys, press_media, validate
 from handsfree.classifier import GestureClassifier
 from handsfree.config import Config, load_config
 from handsfree.gestures import GestureInterpreter, GestureState, Intent, IntentKind, Mode
-from handsfree.shortcuts import ShortcutEngine, ShortcutEvent
+from handsfree.hardneg import HardNegativeRecorder
+from handsfree.shortcuts import MotionGate, ShortcutEngine, ShortcutEvent, hand_in_frame
 from handsfree.tracker import (
     HAND_CONNECTIONS,
     INDEX_TIP,
@@ -156,11 +157,14 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
     mouse = MouseController(cfg.mouse)
     classifier = load_classifier(cfg)
     shortcuts = ShortcutEngine(cfg.shortcuts)
+    motion = MotionGate(cfg.shortcuts.max_speed)
+    hardneg = HardNegativeRecorder()
 
     fps, last_t = 0.0, time.perf_counter()
     last_mode = Mode.IDLE
     paused = False
-    print("HandsFree running. Press 'q' in the preview window to quit.")
+    print("HandsFree running. Press 'q' in the preview window to quit; "
+          "press 'n' right after a false shortcut trigger to save it as a 'none' example.")
     if dry_run:
         print("Dry run: gestures are recognized but the mouse is not controlled.")
     try:
@@ -178,9 +182,14 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
             hand = hands[0] if hands else None
             intents = gestures.update(hand, now)
 
+            h, w = frame.shape[:2]
+            hardneg.push(hand, now, (w, h))
             label, conf = classifier.predict(hand) if classifier else (None, 0.0)
-            # Shortcut poses only count while no mouse gesture is in progress.
-            if gestures.state.mode is not Mode.IDLE:
+            still = motion.update(hand, now)
+            # Shortcut poses only count for a still, fully visible hand with no mouse gesture
+            # in progress.
+            if (gestures.state.mode is not Mode.IDLE or hand is None or not still
+                    or not hand_in_frame(hand, w, h)):
                 label, conf = None, 0.0
             events = shortcuts.update(label, conf, now)
             if shortcuts.candidate is not None:
@@ -209,8 +218,13 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
                 cv2.imshow(WINDOW, frame)
                 if cfg.ui.always_on_top:
                     cv2.setWindowProperty(WINDOW, cv2.WND_PROP_TOPMOST, 1)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
                     break
+                if key == ord("n"):
+                    saved = hardneg.save_recent()
+                    print(f"Saved {saved} frames as 'none' to {hardneg.path} "
+                          f"(retrain with tools/train.py)")
     finally:
         mouse.release()
         cap.release()

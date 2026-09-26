@@ -42,6 +42,7 @@ shortcuts:
   min_confidence: 0.8   # Smoothed probability needed to count as the gesture
   hold_s: 0.4           # Hold the pose this long to fire; fires once per hold
   cooldown_s: 1.0       # Minimum time between two firings of the same gesture
+  max_speed: 1.5        # Ignore poses while the wrist moves faster than this (palm lengths/s)
   # Each binding is one of:
   #   action: toggle_pause                 (stop/resume all control)
   #   media: play | next | previous | mute | volume_up | volume_down

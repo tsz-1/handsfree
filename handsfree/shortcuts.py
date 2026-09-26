@@ -1,6 +1,41 @@
 from dataclasses import dataclass
 
+import numpy as np
+
 from handsfree.config import ShortcutConfig
+from handsfree.tracker import WRIST, Hand
+
+MIDDLE_MCP = 9
+
+
+def hand_in_frame(hand: Hand, width: int, height: int) -> bool:
+    """False while the hand is entering or leaving: MediaPipe guesses off-screen landmarks,
+    and a half-visible hand often looks like a fist."""
+    x, y = hand.pixels[:, 0], hand.pixels[:, 1]
+    return bool((x >= 0).all() and (y >= 0).all() and (x < width).all() and (y < height).all())
+
+
+class MotionGate:
+    """Tracks wrist speed in palm lengths per second; deliberate poses are held still."""
+
+    def __init__(self, max_speed: float):
+        self.max_speed = max_speed
+        self.speed = 0.0
+        self._prev: tuple[np.ndarray, float] | None = None
+
+    def update(self, hand: Hand | None, t: float) -> bool:
+        """Returns True if the hand is still enough for a pose to count."""
+        if hand is None:
+            self._prev = None
+            self.speed = 0.0
+            return False
+        wrist = hand.pixels[WRIST].astype(float)
+        palm = max(float(np.linalg.norm(hand.pixels[MIDDLE_MCP] - hand.pixels[WRIST])), 1e-6)
+        if self._prev is not None and t > self._prev[1]:
+            raw = float(np.linalg.norm(wrist - self._prev[0])) / palm / (t - self._prev[1])
+            self.speed = 0.5 * self.speed + 0.5 * raw
+        self._prev = (wrist, t)
+        return self.speed <= self.max_speed
 
 
 @dataclass

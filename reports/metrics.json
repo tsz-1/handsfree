@@ -1,37 +1,37 @@
 {
   "protocol": "leave-one-session-out",
-  "sessions": 2,
-  "samples": 1439,
+  "sessions": 3,
+  "samples": 3788,
   "per_class": {
-    "call": 178,
-    "fist": 318,
-    "none": 459,
-    "open_palm": 122,
-    "rock": 208,
-    "thumbs_up": 154
+    "call": 579,
+    "fist": 543,
+    "none": 1380,
+    "open_palm": 299,
+    "rock": 602,
+    "thumbs_up": 385
   },
   "best_model": "logreg",
-  "random_split_accuracy": 0.9861111111111112,
+  "random_split_accuracy": 0.9841688654353562,
   "models": {
     "logreg": {
-      "accuracy": 0.8714,
-      "macro_f1": 0.8579,
-      "latency_ms": 0.0859
+      "accuracy": 0.8683,
+      "macro_f1": 0.8652,
+      "latency_ms": 0.0797
     },
     "knn": {
-      "accuracy": 0.6567,
-      "macro_f1": 0.6371,
-      "latency_ms": 0.5694
+      "accuracy": 0.8237,
+      "macro_f1": 0.8011,
+      "latency_ms": 0.4317
     },
     "random_forest": {
-      "accuracy": 0.6942,
-      "macro_f1": 0.6868,
-      "latency_ms": 4.0962
+      "accuracy": 0.8345,
+      "macro_f1": 0.8279,
+      "latency_ms": 3.9066
     },
     "mlp": {
-      "accuracy": 0.7825,
-      "macro_f1": 0.7623,
-      "latency_ms": 0.0884
+      "accuracy": 0.8342,
+      "macro_f1": 0.8147,
+      "latency_ms": 0.0849
     }
   }
 }

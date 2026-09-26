@@ -50,6 +50,7 @@ class ShortcutConfig:
     min_confidence: float = 0.8
     hold_s: float = 0.4
     cooldown_s: float = 1.0
+    max_speed: float = 1.5
     bindings: dict = field(default_factory=dict)
 
 

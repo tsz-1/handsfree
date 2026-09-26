@@ -12,7 +12,7 @@ def mouse(monkeypatch):
     pag = actions.pyautogui
     monkeypatch.setattr(pag, "size", lambda: (1000, 1000))
     monkeypatch.setattr(pag, "moveTo", lambda x, y: calls["move"].append((x, y)))
-    monkeypatch.setattr(pag, "dragTo", lambda x, y, **kw: calls["drag"].append((x, y)))
+    monkeypatch.setattr(pag, "dragTo", lambda x, y, **kw: calls["drag"].append((x, y, kw)))
     monkeypatch.setattr(pag, "click", lambda *p: calls["click"].append(p))
     monkeypatch.setattr(pag, "rightClick", lambda *p: calls["right"].append(p))
     monkeypatch.setattr(pag, "mouseDown", lambda *p: calls["down"].append(p))
@@ -64,8 +64,11 @@ def test_drag_uses_drag_events_and_releases(mouse):
     mouse.execute([Intent(IntentKind.MOVE, 0.6, 0.5)], 0.2)
     mouse.execute([Intent(IntentKind.MOUSE_UP)], 0.3)
     mouse.release()
-    assert len(mouse.calls["down"]) == 1 and len(mouse.calls["drag"]) == 1
-    assert len(mouse.calls["up"]) == 1
+    assert len(mouse.calls["down"]) == 1 and len(mouse.calls["up"]) == 1
+    (_, _, kw), = mouse.calls["drag"]
+    # pyautogui's macOS backend asserts on its own default button ("primary") when
+    # mouseDownUp=False, so the button has to be named explicitly.
+    assert kw == {"button": "left", "mouseDownUp": False}
 
 
 def test_scroll_accumulates_fractional_lines(mouse):

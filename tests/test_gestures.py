@@ -43,6 +43,20 @@ def test_quick_pinch_clicks_once_on_release(clock):
     assert release[0].at == pytest.approx(onset)
 
 
+def test_may_pinch_false_blocks_new_pinch_but_not_ongoing_one(clock):
+    g = clock.g
+    for _ in range(5):
+        g.update(make_hand(pinch="index"), clock.t, may_pinch=False)
+        clock.t += DT
+    assert g.state.mode is Mode.IDLE
+
+    clock.feed(make_hand())
+    clock.feed(make_hand(pinch="index"), 2)
+    assert g.state.mode is Mode.PINCH
+    g.update(make_hand(pinch="index"), clock.t, may_pinch=False)  # hand drifts to the edge
+    assert g.state.mode is Mode.PINCH
+
+
 def test_long_pinch_drags_instead_of_repeat_clicking(clock):
     clock.feed(make_hand(), 3)
     held = clock.feed(make_hand(pinch="index"), 30)  # 1 s

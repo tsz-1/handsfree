@@ -193,16 +193,16 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
             now = time.perf_counter()
             hands = tracker.detect(frame, int(now * 1000))
             hand = hands[0] if hands else None
-            intents = gestures.update(hand, now)
-
             h, w = frame.shape[:2]
+            # A hand entering or leaving the frame produces guessed landmarks that often look
+            # like a pinch or a fist; no new pinches or poses until it is fully visible.
+            in_frame = hand is not None and hand_in_frame(hand, w, h)
+            intents = gestures.update(hand, now, may_pinch=in_frame)
+
             hardneg.push(hand, now, (w, h))
             label, conf = classifier.predict(hand) if classifier else (None, 0.0)
             still = motion.update(hand, now)
-            # Shortcut poses only count for a still, fully visible hand with no mouse gesture
-            # in progress.
-            if (gestures.state.mode is not Mode.IDLE or hand is None or not still
-                    or not hand_in_frame(hand, w, h)):
+            if gestures.state.mode is not Mode.IDLE or not in_frame or not still:
                 label, conf = None, 0.0
             events = shortcuts.update(label, conf, now)
             if shortcuts.candidate is not None:

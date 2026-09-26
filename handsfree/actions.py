@@ -116,8 +116,10 @@ class MouseController:
         while self._history and t - self._history[0][0] > HISTORY_S:
             self._history.popleft()
         if self._button_down:
-            # macOS only delivers drag events (e.g. moving windows) via dragTo.
-            pyautogui.dragTo(*pos, mouseDownUp=False)
+            # macOS only delivers drag events (e.g. moving windows) via dragTo. The button
+            # must be explicit: with mouseDownUp=False pyautogui skips the step that turns
+            # its default "primary" into "left", and the macOS backend then asserts.
+            pyautogui.dragTo(*pos, button="left", mouseDownUp=False)
         else:
             pyautogui.moveTo(*pos)
 

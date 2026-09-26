@@ -107,7 +107,9 @@ class GestureInterpreter:
         self._last_t: float | None = None
         self._scroll_lost_at: float | None = None
 
-    def update(self, hand: Hand | None, t: float) -> list[Intent]:
+    def update(self, hand: Hand | None, t: float, may_pinch: bool = True) -> list[Intent]:
+        """`may_pinch=False` blocks *new* pinches (e.g. while the hand is half out of frame
+        and the landmarks are guesses); a pinch already in progress continues normally."""
         dt = 0.0 if self._last_t is None else t - self._last_t
         self._last_t = t
 
@@ -122,8 +124,8 @@ class GestureInterpreter:
 
         m = measure(hand)
         min_ext = self.cfg.min_finger_extension
-        left = self.left.update(m.left_ratio, may_enter=m.index_ext > min_ext)
-        right = self.right.update(m.right_ratio, may_enter=m.middle_ext > min_ext)
+        left = self.left.update(m.left_ratio, may_enter=may_pinch and m.index_ext > min_ext)
+        right = self.right.update(m.right_ratio, may_enter=may_pinch and m.middle_ext > min_ext)
         self.state.metrics = m
 
         x, y = (float(v) for v in hand.landmarks[INDEX_TIP, :2])

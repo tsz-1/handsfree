@@ -29,6 +29,8 @@ class MouseConfig:
     d_cutoff: float = 1.0
     click_rewind_s: float = 0.15
     reset_after_s: float = 0.5
+    double_click_s: float = 0.8
+    double_click_px: float = 40.0
 
 
 @dataclass

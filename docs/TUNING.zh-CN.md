@@ -123,6 +123,8 @@ python -m handsfree --dry-run
 | 手要移动很远才能到屏幕边缘 | 调大 `margin_x` / `margin_y` |
 | 光标太灵敏，小按钮难点中 | 调小 `margin_x` / `margin_y`（操作框变大） |
 | 手离开画面再回来，光标会滑过来 | 调小 `reset_after_s` |
+| 连捏两下打不开文件（双击不成立） | 调大 `double_click_s`（两次捏合的时间窗）或 `double_click_px` |
+| 想连点两次却被当成双击 | 调小 `double_click_s` |
 
 `margin_x` 和 `margin_y` 调整时建议保持横纵放大倍数接近，否则横向和纵向移动手感不一致。放大倍数的计算方法：
 

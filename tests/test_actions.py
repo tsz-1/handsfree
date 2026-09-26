@@ -13,7 +13,7 @@ def mouse(monkeypatch):
     monkeypatch.setattr(pag, "size", lambda: (1000, 1000))
     monkeypatch.setattr(pag, "moveTo", lambda x, y: calls["move"].append((x, y)))
     monkeypatch.setattr(pag, "dragTo", lambda x, y, **kw: calls["drag"].append((x, y, kw)))
-    monkeypatch.setattr(pag, "click", lambda *p: calls["click"].append(p))
+    monkeypatch.setattr(actions, "click_at", lambda x, y, n=1: calls["click"].append((x, y, n)))
     monkeypatch.setattr(pag, "rightClick", lambda *p: calls["right"].append(p))
     monkeypatch.setattr(pag, "mouseDown", lambda *p: calls["down"].append(p))
     monkeypatch.setattr(pag, "mouseUp", lambda *p: calls["up"].append(p))
@@ -45,7 +45,7 @@ def test_click_rewinds_past_pinch_drift(mouse):
         t += dt
     mouse.execute([Intent(IntentKind.CLICK)], t)
 
-    (x, _), = mouse.calls["click"]
+    (x, _, _), = mouse.calls["click"]
     assert x == pytest.approx(0.2 * 999, abs=5)
 
 
@@ -54,8 +54,30 @@ def test_press_uses_gesture_onset_not_release_time(mouse):
         mouse.execute([Intent(IntentKind.MOVE, 0.2, 0.5)], i / 30)
     # No MOVEs while pinched; the click arrives on release, well after the rewind window.
     mouse.execute([Intent(IntentKind.CLICK, at=10 / 30)], 1.0)
-    (x, _), = mouse.calls["click"]
+    (x, _, _), = mouse.calls["click"]
     assert x == pytest.approx(0.2 * 999, abs=5)
+
+
+def test_two_quick_pinches_make_a_double_click_on_the_first_target(mouse):
+    mouse.execute([Intent(IntentKind.MOVE, 0.5, 0.5)], 0.0)
+    mouse.execute([Intent(IntentKind.CLICK, at=0.5)], 0.6)
+    # The hand drifts a little (20 px) before the second pinch.
+    mouse.execute([Intent(IntentKind.MOVE, 0.52, 0.5)], 0.8)
+    mouse.execute([Intent(IntentKind.CLICK, at=1.0)], 1.1)
+    # A third pinch after a long pause is a fresh single click.
+    mouse.execute([Intent(IntentKind.CLICK, at=2.5)], 2.6)
+
+    (x1, _, n1), (x2, _, n2), (_, _, n3) = mouse.calls["click"]
+    assert (n1, n2, n3) == (1, 2, 1)
+    assert x2 == x1
+
+
+def test_pinches_far_apart_are_separate_clicks(mouse):
+    mouse.execute([Intent(IntentKind.MOVE, 0.2, 0.5)], 0.0)
+    mouse.execute([Intent(IntentKind.CLICK, at=0.5)], 0.6)
+    mouse.execute([Intent(IntentKind.MOVE, 0.8, 0.5)], 0.8)
+    mouse.execute([Intent(IntentKind.CLICK, at=1.0)], 1.1)
+    assert [n for _, _, n in mouse.calls["click"]] == [1, 1]
 
 
 def test_drag_uses_drag_events_and_releases(mouse):

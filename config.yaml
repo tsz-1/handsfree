@@ -21,6 +21,8 @@ mouse:
   d_cutoff: 1.0
   click_rewind_s: 0.15   # Click where the cursor was this long ago, before the pinch pulled it
   reset_after_s: 0.5     # Restart smoothing if the hand was lost for this long
+  double_click_s: 0.8    # Two pinches this close in time (s) and space (px) make a double-click
+  double_click_px: 40
 
 # Distances below are in palm sizes (wrist → middle-finger knuckle), so they don't
 # change with how far the hand is from the camera.

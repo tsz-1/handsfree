@@ -39,6 +39,23 @@ def validate_binding(gesture: str, binding: dict):
             raise ValueError(f"Unknown keys {bad} for {gesture!r}")
 
 
+def click_at(x: float, y: float, count: int = 1):
+    """Left-click with an explicit click count.
+
+    macOS does not infer double-clicks from timing: the event itself carries the count, and
+    pyautogui never sets it, so its clicks can't open a file. Post the events ourselves.
+    """
+    if sys.platform != "darwin":
+        pyautogui.click(x, y)  # Windows and X11 derive the count from timing.
+        return
+    import Quartz
+
+    for kind in (Quartz.kCGEventLeftMouseDown, Quartz.kCGEventLeftMouseUp):
+        event = Quartz.CGEventCreateMouseEvent(None, kind, (x, y), Quartz.kCGMouseButtonLeft)
+        Quartz.CGEventSetIntegerValueField(event, Quartz.kCGMouseEventClickState, count)
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
+
+
 def press_keys(keys: list):
     pyautogui.hotkey(*[str(k) for k in keys])
 
@@ -61,6 +78,7 @@ class MouseController:
         self._history: deque[tuple[float, np.ndarray]] = deque()
         self._button_down = False
         self._scroll_remainder = 0.0
+        self._last_click: tuple[float, np.ndarray, int] | None = None  # time, pos, count
 
     def to_screen(self, x: float, y: float) -> np.ndarray:
         """Map a point in the active region of the frame (normalized) to screen pixels."""
@@ -84,7 +102,7 @@ class MouseController:
             if kind is IntentKind.MOVE:
                 self._move(intent, t)
             elif kind is IntentKind.CLICK:
-                pyautogui.click(*self._press_position(intent, t))
+                self._click(intent, t)
             elif kind is IntentKind.RIGHT_CLICK:
                 pyautogui.rightClick(*self._press_position(intent, t))
             elif kind is IntentKind.MOUSE_DOWN:
@@ -99,6 +117,21 @@ class MouseController:
         if self._button_down:
             pyautogui.mouseUp()
             self._button_down = False
+
+    def _click(self, intent: Intent, t: float):
+        pos = self._press_position(intent, t)
+        if not pos:
+            return
+        pos = np.array(pos)
+        count = 1
+        if self._last_click is not None:
+            last_t, last_pos, last_count = self._last_click
+            if (t - last_t <= self.cfg.double_click_s
+                    and np.linalg.norm(pos - last_pos) <= self.cfg.double_click_px):
+                # Second pinch lands on the same target as the first, even if the hand drifted.
+                pos, count = last_pos, last_count + 1
+        click_at(float(pos[0]), float(pos[1]), count)
+        self._last_click = (t, pos, count)
 
     def _press_position(self, intent: Intent, t: float) -> tuple:
         # Closing the pinch drags the fingertip; press where the cursor was just before.

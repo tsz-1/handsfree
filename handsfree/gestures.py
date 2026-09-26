@@ -85,6 +85,7 @@ class GestureState:
     mode: Mode = Mode.IDLE
     metrics: HandMetrics | None = None
     scroll_anchor_y: float | None = None  # pixel y of the index tip when scrolling began
+    scroll_offset: float = 0.0  # palm sizes above (+) or below (-) the anchor
 
 
 class GestureInterpreter:
@@ -104,12 +105,15 @@ class GestureInterpreter:
         self.state = GestureState()
         self._onset = 0.0
         self._last_t: float | None = None
+        self._scroll_lost_at: float | None = None
 
     def update(self, hand: Hand | None, t: float) -> list[Intent]:
         dt = 0.0 if self._last_t is None else t - self._last_t
         self._last_t = t
 
         if hand is None:
+            if self._hold_scroll(t):
+                return []
             intents = [Intent(IntentKind.MOUSE_UP)] if self.state.mode is Mode.DRAG else []
             self.left.reset()
             self.right.reset()
@@ -155,24 +159,43 @@ class GestureInterpreter:
         _, index_up, middle_up, ring_up, pinky_up = m.fingers
         if index_up and middle_up and not ring_up and not pinky_up:
             tip_y_px = float(hand.pixels[INDEX_TIP, 1])
+            self._scroll_lost_at = None
             if mode is not Mode.SCROLL:
                 self._to(Mode.SCROLL)
                 self.state.scroll_anchor_y = tip_y_px
                 return []
             return self._scroll(tip_y_px, m.palm, dt)
 
+        if self._hold_scroll(t):
+            return []
+
         self._to(Mode.IDLE)
         return [Intent(IntentKind.MOVE, x, y)] if index_up else []
+
+    def _hold_scroll(self, t: float) -> bool:
+        """Keep scroll mode (and its anchor) through brief posture or tracking dropouts.
+
+        Otherwise a one-frame glitch re-anchors at the current, already-offset position,
+        and moving back toward the original neutral point reverses the scroll direction.
+        """
+        if self.state.mode is not Mode.SCROLL:
+            return False
+        if self._scroll_lost_at is None:
+            self._scroll_lost_at = t
+        return t - self._scroll_lost_at < self.cfg.scroll_grace_s
 
     def _to(self, mode: Mode, *intents: Intent) -> list[Intent]:
         self.state.mode = mode
         if mode is not Mode.SCROLL:
             self.state.scroll_anchor_y = None
+            self.state.scroll_offset = 0.0
+            self._scroll_lost_at = None
         return list(intents)
 
     def _scroll(self, y_px: float, palm: float, dt: float) -> list[Intent]:
         # Joystick-style: offset from the anchor (in palm sizes) beyond a dead zone sets speed.
         offset = (self.state.scroll_anchor_y - y_px) / palm
+        self.state.scroll_offset = offset
         excess = abs(offset) - self.cfg.scroll_deadzone
         if excess <= 0 or dt <= 0:
             return []

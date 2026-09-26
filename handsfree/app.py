@@ -16,7 +16,8 @@ from handsfree.tracker import (
 )
 
 WINDOW = "HandsFree"
-MAGENTA, GREEN, WHITE, YELLOW = (255, 0, 255), (0, 255, 0), (255, 255, 255), (0, 255, 255)
+MAGENTA, GREEN, WHITE = (255, 0, 255), (0, 255, 0), (255, 255, 255)
+YELLOW, GRAY = (0, 255, 255), (150, 150, 150)
 
 
 def open_camera(cfg: Config, max_index: int = 4) -> cv2.VideoCapture:
@@ -36,6 +37,17 @@ def open_camera(cfg: Config, max_index: int = 4) -> cv2.VideoCapture:
         f"No working camera found (tried indices {candidates}). On macOS, allow Camera access "
         "for your terminal app in System Settings → Privacy & Security → Camera, then restart it."
     )
+
+
+def scroll_label(state: GestureState, cfg: Config) -> str:
+    if state.mode is not Mode.SCROLL:
+        return ""
+    offset = state.scroll_offset
+    if abs(offset) <= cfg.gestures.scroll_deadzone:
+        direction = "HOLD"
+    else:
+        direction = "UP" if (offset > 0) == (cfg.gestures.scroll_speed > 0) else "DOWN"
+    return f" {direction} ({offset:+.2f})"
 
 
 def draw_overlay(frame, cfg: Config, hand: Hand | None, state: GestureState, fps: float):
@@ -58,13 +70,18 @@ def draw_overlay(frame, cfg: Config, hand: Hand | None, state: GestureState, fps
             if active:
                 cv2.circle(frame, tuple((thumb + pts[tip]) // 2), 12, GREEN, cv2.FILLED)
 
-        if state.scroll_anchor_y is not None:
-            ay = int(state.scroll_anchor_y)
-            cv2.line(frame, (0, ay), (w, ay), YELLOW, 1)
-            cv2.line(frame, (pts[INDEX_TIP][0], ay), tuple(pts[INDEX_TIP]), YELLOW, 2)
-
     m = state.metrics
-    lines = [f"Mode: {state.mode.value}"]
+    if state.scroll_anchor_y is not None and m is not None:
+        ay = int(state.scroll_anchor_y)
+        band = int(cfg.gestures.scroll_deadzone * m.palm)
+        cv2.line(frame, (0, ay), (w, ay), YELLOW, 1)
+        for edge in (ay - band, ay + band):
+            cv2.line(frame, (0, edge), (w, edge), GRAY, 1)
+        if hand is not None:
+            tip = tuple(hand.pixels[INDEX_TIP].astype(int))
+            cv2.line(frame, (tip[0], ay), tip, YELLOW, 2)
+
+    lines = [f"Mode: {state.mode.value}{scroll_label(state, cfg)}"]
     if hand is not None and m is not None:
         lines += [
             f"L pinch {m.left_ratio:.2f}  R pinch {m.right_ratio:.2f}",
@@ -91,6 +108,7 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
     mouse = MouseController(cfg.mouse)
 
     fps, last_t = 0.0, time.perf_counter()
+    last_mode = Mode.IDLE
     print("HandsFree running. Press 'q' in the preview window to quit.")
     if dry_run:
         print("Dry run: gestures are recognized but the mouse is not controlled.")
@@ -109,6 +127,9 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
             hand = hands[0] if hands else None
             intents = gestures.update(hand, now)
             if verbose:
+                if gestures.state.mode is not last_mode:
+                    last_mode = gestures.state.mode
+                    print(f"[{now:9.3f}] -> {last_mode.value}")
                 log_intents(intents, now)
             if not dry_run:
                 mouse.execute(intents, now)

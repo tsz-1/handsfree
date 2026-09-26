@@ -39,6 +39,7 @@ class GestureConfig:
     hold_s: float = 0.3
     scroll_deadzone: float = 0.15
     scroll_speed: float = 40.0
+    scroll_grace_s: float = 0.3
 
 
 @dataclass

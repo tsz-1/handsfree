@@ -128,6 +128,36 @@ def test_two_fingers_scroll_with_dead_zone(clock):
     assert down and all(i.amount < 0 for i in down)
 
 
+@pytest.mark.parametrize("glitch", [make_hand(up=("index",), dy=-50), None],
+                         ids=["posture flicker", "tracking lost"])
+def test_brief_glitch_keeps_scroll_anchor(clock, glitch):
+    two = ("index", "middle")
+    clock.feed(make_hand(up=two), 3)  # anchor here
+    clock.feed(make_hand(up=two, dy=-50), 5)  # scrolling up
+    assert kinds(clock.feed(glitch, 3)) == []  # 0.1 s glitch
+    clock.feed(make_hand(up=two, dy=-50), 2)
+    # Easing back toward neutral but still above the original anchor: must keep scrolling up,
+    # not flip to down as it would if the glitch had re-anchored at dy=-50.
+    back = clock.feed(make_hand(up=two, dy=-25), 5)
+    assert back and all(i.kind is IntentKind.SCROLL and i.amount > 0 for i in back)
+
+
+def test_long_break_ends_scroll_and_reanchors(clock):
+    two = ("index", "middle")
+    clock.feed(make_hand(up=two), 3)
+    clock.feed(make_hand(up=two, dy=-50), 3)
+    clock.feed(make_hand(up=("index",), dy=-50), 15)  # 0.5 s > grace
+    assert clock.g.state.mode is Mode.IDLE
+    clock.feed(make_hand(up=two, dy=-50), 3)
+    assert clock.g.state.scroll_anchor_y == pytest.approx(200 - 50)
+
+
+def test_pinch_exits_scroll_immediately(clock):
+    clock.feed(make_hand(up=("index", "middle")), 3)
+    clock.feed(make_hand(pinch="index"), 1)
+    assert clock.g.state.mode is Mode.PINCH
+
+
 def test_losing_hand_mid_drag_releases_button(clock):
     clock.feed(make_hand(pinch="index"), 20)
     assert clock.g.state.mode is Mode.DRAG

@@ -31,6 +31,7 @@ gestures:
   hold_s: 0.3                # Pinch longer than this starts a drag instead of a click
   scroll_deadzone: 0.15      # Hand offset ignored before scrolling starts
   scroll_speed: 40           # Lines/s per palm size beyond the dead zone; negative to invert
+  scroll_grace_s: 0.3        # Keep the scroll anchor through posture/tracking glitches this long
 
 ui:
   show_window: true

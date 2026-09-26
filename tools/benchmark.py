@@ -46,8 +46,11 @@ def one_euro(points, ts, cfg):
 
 
 def jitter(points):
-    """RMS deviation from the mean position, in pixels."""
-    return float(np.sqrt(((points - points.mean(0)) ** 2).sum(1).mean()))
+    """RMS frame-to-frame cursor displacement in pixels: how much the cursor twitches each
+    frame. Unlike deviation from the mean, this ignores the slow drift of a hand held in
+    the air, which One Euro deliberately preserves."""
+    steps = np.diff(points, axis=0)
+    return float(np.sqrt((steps ** 2).sum(1).mean()))
 
 
 def synthetic_lag(cfg, speed_px_s=1800.0, fps=30):
@@ -157,6 +160,8 @@ def main():
         "lag_at_1800px_s": lag,
         "screen": [mouse.screen_w, mouse.screen_h],
         "camera": [cfg.camera.width, cfg.camera.height],
+        # Raw hold-still trajectory, so the smoothing comparison can be recomputed offline.
+        "still_trajectory": {"t": (ts - ts[0]).round(4).tolist(), "xy": pts.round(1).tolist()},
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2))
@@ -166,7 +171,7 @@ def main():
     print("| Stage | p50 (ms) | p95 (ms) |\n| --- | --- | --- |")
     for k, v in ms.items():
         print(f"| {k} | {v['p50']:.1f} | {v['p95']:.1f} |")
-    print("\n| Smoothing | Jitter, hand still (px RMS) | Lag at 1800 px/s (px, synthetic) |")
+    print("\n| Smoothing | Jitter, hand still (px/frame RMS) | Lag at 1800 px/s (px, synthetic) |")
     print("| --- | --- | --- |")
     print(f"| None | {jit['raw_px']:.1f} | 0 |")
     print(f"| Exponential (÷8, prototype) | {jit['ema_div8_px']:.1f} | {lag['ema_div8_px']:.0f} |")

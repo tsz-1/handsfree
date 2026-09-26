@@ -3,6 +3,7 @@
 Keys (in the preview window):
   0-9    start recording the gesture with that number
   space  stop recording (the session is saved every time you stop)
+  u      undo: discard the clip being recorded, or the last one (repeatable)
   q      quit
 
 Each run is one session file in data/gestures/. Record at least two sessions (e.g. different
@@ -10,6 +11,7 @@ lighting, seat, or day) so tools/train.py can test on a session it never trained
 """
 
 import argparse
+import collections
 import time
 from pathlib import Path
 
@@ -35,6 +37,9 @@ TIPS = {
 
 def save(path: Path, samples: list[dict], frame_size: tuple[int, int]):
     if not samples:
+        if path.exists():
+            path.unlink()
+            print(f"No samples left; removed {path}")
         return
     np.savez_compressed(
         path,
@@ -73,7 +78,7 @@ def draw(frame, hand, labels, counts, current, recording):
         if hand is None:
             cv2.putText(frame, "No hand", (45, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     else:
-        cv2.putText(frame, "Press 0-9 to record, space to stop, q to quit", (20, 38),
+        cv2.putText(frame, "0-9 record, space stop, u undo, q quit", (20, 38),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
 
@@ -94,6 +99,7 @@ def main():
     path = DATA_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}.npz"
 
     samples: list[dict] = []
+    clip_starts: list[int] = []  # index in `samples` where each recorded clip begins
     counts: dict[str, int] = {}
     current, recording, frame_i = args.labels[0], False, 0
     frame_size = (cfg.camera.width, cfg.camera.height)
@@ -124,8 +130,17 @@ def main():
             if key == ord(" ") and recording:
                 recording = False
                 save(path, samples, frame_size)
+            elif key == ord("u") and clip_starts:
+                start = clip_starts.pop()
+                dropped = len(samples) - start
+                del samples[start:]
+                counts = collections.Counter(s["label"] for s in samples)
+                recording = False
+                print(f"Undo: discarded {dropped} samples")
+                save(path, samples, frame_size)
             elif ord("0") <= key <= ord("9") and key - ord("0") < len(args.labels):
                 current, recording = args.labels[key - ord("0")], True
+                clip_starts.append(len(samples))
     finally:
         save(path, samples, frame_size)
         cap.release()

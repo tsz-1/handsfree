@@ -5,11 +5,18 @@ import cv2
 
 from handsfree.actions import MouseController
 from handsfree.config import Config, load_config
-from handsfree.gestures import GestureInterpreter, GestureState
-from handsfree.tracker import HAND_CONNECTIONS, INDEX_TIP, THUMB_TIP, Hand, HandTracker
+from handsfree.gestures import GestureInterpreter, GestureState, Intent, IntentKind, Mode
+from handsfree.tracker import (
+    HAND_CONNECTIONS,
+    INDEX_TIP,
+    MIDDLE_TIP,
+    THUMB_TIP,
+    Hand,
+    HandTracker,
+)
 
 WINDOW = "HandsFree"
-MAGENTA, GREEN, WHITE = (255, 0, 255), (0, 255, 0), (255, 255, 255)
+MAGENTA, GREEN, WHITE, YELLOW = (255, 0, 255), (0, 255, 0), (255, 255, 255), (0, 255, 255)
 
 
 def open_camera(cfg: Config, max_index: int = 4) -> cv2.VideoCapture:
@@ -43,18 +50,41 @@ def draw_overlay(frame, cfg: Config, hand: Hand | None, state: GestureState, fps
         for p in pts:
             cv2.circle(frame, tuple(p), 3, MAGENTA, cv2.FILLED)
 
-        thumb, index = pts[THUMB_TIP], pts[INDEX_TIP]
-        cv2.line(frame, tuple(thumb), tuple(index), MAGENTA, 2)
-        if state.pinching:
-            mid = (thumb + index) // 2
-            cv2.circle(frame, tuple(mid), 12, GREEN, cv2.FILLED)
-        cv2.putText(frame, f"Pinch: {state.pinch_distance:.0f}px", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, MAGENTA, 2)
+        thumb = pts[THUMB_TIP]
+        for tip, active_modes in ((INDEX_TIP, (Mode.PINCH, Mode.DRAG)),
+                                  (MIDDLE_TIP, (Mode.RIGHT_PINCH,))):
+            active = state.mode in active_modes
+            cv2.line(frame, tuple(thumb), tuple(pts[tip]), GREEN if active else MAGENTA, 2)
+            if active:
+                cv2.circle(frame, tuple((thumb + pts[tip]) // 2), 12, GREEN, cv2.FILLED)
+
+        if state.scroll_anchor_y is not None:
+            ay = int(state.scroll_anchor_y)
+            cv2.line(frame, (0, ay), (w, ay), YELLOW, 1)
+            cv2.line(frame, (pts[INDEX_TIP][0], ay), tuple(pts[INDEX_TIP]), YELLOW, 2)
+
+    m = state.metrics
+    lines = [f"Mode: {state.mode.value}"]
+    if hand is not None and m is not None:
+        lines += [
+            f"L pinch {m.left_ratio:.2f}  R pinch {m.right_ratio:.2f}",
+            f"Index ext {m.index_ext:.2f}  Middle ext {m.middle_ext:.2f}",
+        ]
+    for i, text in enumerate(lines):
+        cv2.putText(frame, text, (20, 35 + 28 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.7, MAGENTA, 2)
 
     cv2.putText(frame, f"FPS: {fps:.0f}", (20, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, GREEN, 2)
 
 
-def run(cfg: Config):
+def log_intents(intents: list[Intent], t: float):
+    for intent in intents:
+        if intent.kind is IntentKind.MOVE:
+            continue
+        extra = f" {intent.amount:+.2f}" if intent.kind is IntentKind.SCROLL else ""
+        print(f"[{t:9.3f}] {intent.kind.value}{extra}")
+
+
+def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
     cap = open_camera(cfg)
     tracker = HandTracker(cfg.tracker)
     gestures = GestureInterpreter(cfg.gestures)
@@ -62,6 +92,8 @@ def run(cfg: Config):
 
     fps, last_t = 0.0, time.perf_counter()
     print("HandsFree running. Press 'q' in the preview window to quit.")
+    if dry_run:
+        print("Dry run: gestures are recognized but the mouse is not controlled.")
     try:
         while True:
             ok, frame = cap.read()
@@ -75,7 +107,11 @@ def run(cfg: Config):
             now = time.perf_counter()
             hands = tracker.detect(frame, int(now * 1000))
             hand = hands[0] if hands else None
-            mouse.execute(gestures.update(hand, now), now)
+            intents = gestures.update(hand, now)
+            if verbose:
+                log_intents(intents, now)
+            if not dry_run:
+                mouse.execute(intents, now)
 
             dt = now - last_t
             last_t = now
@@ -90,6 +126,7 @@ def run(cfg: Config):
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
     finally:
+        mouse.release()
         cap.release()
         tracker.close()
         cv2.destroyAllWindows()
@@ -99,12 +136,16 @@ def main():
     parser = argparse.ArgumentParser(description="Touchless computer control with hand gestures")
     parser.add_argument("--config", default="config.yaml", help="Path to the YAML config")
     parser.add_argument("--camera", type=int, help="Override the camera index")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Recognize gestures without controlling the mouse (implies --verbose)")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Print click, drag, and scroll events to the terminal")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     if args.camera is not None:
         cfg.camera.index = args.camera
-    run(cfg)
+    run(cfg, dry_run=args.dry_run, verbose=args.verbose or args.dry_run)
 
 
 if __name__ == "__main__":

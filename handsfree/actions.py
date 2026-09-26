@@ -19,6 +19,8 @@ class MouseController:
         self.screen_w, self.screen_h = pyautogui.size()
         self._filter = OneEuroFilter(cfg.min_cutoff, cfg.beta, cfg.d_cutoff)
         self._history: deque[tuple[float, np.ndarray]] = deque()
+        self._button_down = False
+        self._scroll_remainder = 0.0
 
     def to_screen(self, x: float, y: float) -> np.ndarray:
         """Map a point in the active region of the frame (normalized) to screen pixels."""
@@ -38,10 +40,31 @@ class MouseController:
 
     def execute(self, intents: list[Intent], t: float):
         for intent in intents:
-            if intent.kind is IntentKind.MOVE:
+            kind = intent.kind
+            if kind is IntentKind.MOVE:
                 self._move(intent, t)
-            elif intent.kind is IntentKind.CLICK:
-                self._click(t)
+            elif kind is IntentKind.CLICK:
+                pyautogui.click(*self._press_position(intent, t))
+            elif kind is IntentKind.RIGHT_CLICK:
+                pyautogui.rightClick(*self._press_position(intent, t))
+            elif kind is IntentKind.MOUSE_DOWN:
+                pyautogui.mouseDown(*self._press_position(intent, t))
+                self._button_down = True
+            elif kind is IntentKind.MOUSE_UP:
+                self.release()
+            elif kind is IntentKind.SCROLL:
+                self._scroll(intent.amount)
+
+    def release(self):
+        if self._button_down:
+            pyautogui.mouseUp()
+            self._button_down = False
+
+    def _press_position(self, intent: Intent, t: float) -> tuple:
+        # Closing the pinch drags the fingertip; press where the cursor was just before.
+        start = intent.at if intent.at is not None else t
+        pos = self.position_at(start - self.cfg.click_rewind_s)
+        return () if pos is None else (float(pos[0]), float(pos[1]))
 
     def _move(self, intent: Intent, t: float):
         if self._history and t - self._history[-1][0] > self.cfg.reset_after_s:
@@ -52,12 +75,15 @@ class MouseController:
         self._history.append((t, pos))
         while self._history and t - self._history[0][0] > HISTORY_S:
             self._history.popleft()
-        pyautogui.moveTo(*pos)
-
-    def _click(self, t: float):
-        # Closing the pinch drags the fingertip; click where the cursor was just before.
-        pos = self.position_at(t - self.cfg.click_rewind_s)
-        if pos is not None:
-            pyautogui.click(*pos)
+        if self._button_down:
+            # macOS only delivers drag events (e.g. moving windows) via dragTo.
+            pyautogui.dragTo(*pos, mouseDownUp=False)
         else:
-            pyautogui.click()
+            pyautogui.moveTo(*pos)
+
+    def _scroll(self, amount: float):
+        self._scroll_remainder += amount
+        lines = int(self._scroll_remainder)
+        if lines:
+            pyautogui.scroll(lines)
+            self._scroll_remainder -= lines

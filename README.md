@@ -19,6 +19,11 @@ On macOS, grant your terminal **Camera** and **Accessibility** permissions
 | Gesture | Action |
 | --- | --- |
 | Index finger up | Move cursor |
-| Thumb–index pinch | Click |
+| Thumb–index pinch, quick release | Left click (twice for double-click) |
+| Thumb–index pinch, hold > 0.3 s | Drag; release to drop |
+| Thumb–middle pinch | Right click |
+| Index + middle up, move hand up/down | Scroll (farther from start = faster) |
 
 Press `q` in the preview window to quit. Settings live in `config.yaml`.
+Use `--dry-run` to see recognized gestures without controlling the mouse.
+See [docs/TUNING.zh-CN.md](docs/TUNING.zh-CN.md) for a tuning guide.

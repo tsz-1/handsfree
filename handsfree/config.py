@@ -33,8 +33,12 @@ class MouseConfig:
 
 @dataclass
 class GestureConfig:
-    pinch_threshold_px: float = 50.0
-    click_cooldown_s: float = 0.2
+    pinch_enter: float = 0.30
+    pinch_exit: float = 0.40
+    min_finger_extension: float = 1.2
+    hold_s: float = 0.3
+    scroll_deadzone: float = 0.15
+    scroll_speed: float = 40.0
 
 
 @dataclass

@@ -22,9 +22,15 @@ mouse:
   click_rewind_s: 0.15   # Click where the cursor was this long ago, before the pinch pulled it
   reset_after_s: 0.5     # Restart smoothing if the hand was lost for this long
 
+# Distances below are in palm sizes (wrist → middle-finger knuckle), so they don't
+# change with how far the hand is from the camera.
 gestures:
-  pinch_threshold_px: 50
-  click_cooldown_s: 0.2
+  pinch_enter: 0.30          # Fingertip gap that counts as a pinch
+  pinch_exit: 0.40           # Gap needed to release; the gap between the two prevents flicker
+  min_finger_extension: 1.2  # Pinching finger must be at least this far from the wrist (rejects fists)
+  hold_s: 0.3                # Pinch longer than this starts a drag instead of a click
+  scroll_deadzone: 0.15      # Hand offset ignored before scrolling starts
+  scroll_speed: 40           # Lines/s per palm size beyond the dead zone; negative to invert
 
 ui:
   show_window: true

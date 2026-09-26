@@ -27,6 +27,16 @@ def test_left_hand_maps_onto_right_hand():
     np.testing.assert_allclose(features(mirrored(hand)), features(hand), atol=1e-5)
 
 
+def test_features_ignore_in_plane_rotation():
+    hand = make_hand(up=("index", "pinky"))
+    base = features(hand)
+    for deg in (35, 90, -120):
+        a = np.deg2rad(deg)
+        rot = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+        p = (hand.pixels - hand.pixels[0]) @ rot.T + hand.pixels[0]
+        np.testing.assert_allclose(hand_features(p.astype(np.float32)), base, atol=1e-4)
+
+
 def test_different_poses_differ():
     assert np.linalg.norm(features(make_hand(up=())) - features(make_hand())) > 0.5
 

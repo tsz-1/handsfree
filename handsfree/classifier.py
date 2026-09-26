@@ -5,23 +5,33 @@ import numpy as np
 
 from handsfree.tracker import WRIST, Hand
 
-MIDDLE_MCP = 9
-FEATURE_VERSION = 1
+INDEX_MCP, MIDDLE_MCP, PINKY_MCP = 5, 9, 17
+FEATURE_VERSION = 2
 
 # "none" = anything that isn't a shortcut, including the mouse poses (point, pinch, two fingers).
 DEFAULT_LABELS = ["none", "fist", "open_palm", "thumbs_up", "rock", "call"]
 
 
-def hand_features(pixels: np.ndarray, handedness: str) -> np.ndarray:
-    """42-d pose descriptor: 2D landmarks relative to the wrist, in palm lengths.
+def hand_features(pixels: np.ndarray, handedness: str | None = None) -> np.ndarray:
+    """42-d pose descriptor: 2D landmarks in a canonical hand frame.
 
-    Translation and scale are removed so distance to the camera doesn't matter. Left hands are
-    mirrored onto right hands. Rotation is kept on purpose: it separates e.g. thumbs up/down.
+    Wrist at the origin, palm length (wrist → middle knuckle) as the unit, palm axis rotated
+    to point up, and the hand mirrored so the index knuckle is left of the pinky knuckle.
+    This removes position, distance to the camera, in-plane rotation, and which hand or side
+    (palm/back) is showing, all of which vary a lot between recording sessions. MediaPipe's
+    handedness label is ignored because it flips when the hand turns over.
+    Consequence: poses that differ only by orientation (thumbs up vs down) are not separable.
     """
     p = pixels[:, :2].astype(np.float64) - pixels[WRIST, :2]
     palm = max(float(np.linalg.norm(p[MIDDLE_MCP])), 1e-6)
     p /= palm
-    if handedness == "Left":
+
+    x, y = p[MIDDLE_MCP]
+    angle = -np.arctan2(x, -y)  # rotate so the palm axis points to -y (up on screen)
+    c, s = np.cos(angle), np.sin(angle)
+    p = p @ np.array([[c, s], [-s, c]])
+
+    if p[INDEX_MCP, 0] > p[PINKY_MCP, 0]:
         p[:, 0] = -p[:, 0]
     return p.reshape(-1)
 

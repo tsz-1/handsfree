@@ -4,6 +4,8 @@
   python tools/dataset.py drop SESSION --label rock     # remove one gesture from a session
   python tools/dataset.py drop SESSION                  # delete the whole session
   python tools/dataset.py trim SESSION                  # drop transition frames at clip edges
+  python tools/dataset.py check                         # which fingers are up, per gesture/session
+  python tools/dataset.py relabel SESSION --map rock=call call=open_palm   # fix wrong keys
 
 `trim` is for sessions recorded before tools/record.py trimmed clips itself; run it once.
 
@@ -84,6 +86,49 @@ def cmd_trim(args):
     print(f"Trimmed {removed} transition samples from {path.name}; {int(keep.sum())} left")
 
 
+FINGERTIPS = {"thumb": 4, "index": 8, "middle": 12, "ring": 16, "pinky": 20}
+
+
+def cmd_check(_args):
+    """Per gesture and session, how far each fingertip is from the wrist (in palm lengths).
+
+    ~2.0 = straight, ~1.0 = curled. A gesture should look the same in every session; if it
+    doesn't, a key was probably pressed for the wrong gesture (fix with `relabel`).
+    """
+    files = sorted(DATA_DIR.glob("*.npz"))
+    print("fingertip-to-wrist distance in palm lengths (2.0 straight, 1.0 curled)")
+    header = f"{'':32s}" + "".join(f"{k:>8s}" for k in FINGERTIPS)
+    print(header)
+    rows = {}
+    for f in files:
+        d = np.load(f)
+        px = d["pixels"][:, :, :2].astype(float)
+        palm = np.linalg.norm(px[:, 9] - px[:, 0], axis=1)
+        labels = d["labels"].astype(str)
+        for label in sorted(set(labels)):
+            m = labels == label
+            ext = [np.linalg.norm(px[m, i] - px[m, 0], axis=1) / palm[m] for i in FINGERTIPS.values()]
+            rows.setdefault(label, []).append((f.stem, m.sum(), [e.mean() for e in ext]))
+    for label, entries in rows.items():
+        for stem, n, ext in entries:
+            marks = "".join(f"{e:6.2f}{'^' if e > 1.5 else ' '} " for e in ext)
+            print(f"{label:11s}{stem:16s}{n:4d} {marks}")
+        print()
+
+
+def cmd_relabel(args):
+    path = resolve(args.session)
+    mapping = dict(item.split("=", 1) for item in args.map)
+    data = dict(np.load(path))
+    labels = data["labels"].astype(str)
+    new = np.array([mapping.get(label, label) for label in labels])
+    changed = int((new != labels).sum())
+    data["labels"] = new
+    np.savez_compressed(path, **data)
+    print(f"Relabeled {changed} samples in {path.name}: "
+          + ", ".join(f"{a} -> {b}" for a, b in mapping.items()))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                      formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -98,6 +143,12 @@ def main():
     trim.add_argument("session")
     trim.add_argument("--seconds", type=float, default=0.3)
     trim.set_defaults(fn=cmd_trim)
+    sub.add_parser("check", help="Show which fingers are extended per gesture and session") \
+        .set_defaults(fn=cmd_check)
+    relabel = sub.add_parser("relabel", help="Rename gestures in a session (applied at once)")
+    relabel.add_argument("session")
+    relabel.add_argument("--map", nargs="+", required=True, metavar="OLD=NEW")
+    relabel.set_defaults(fn=cmd_relabel)
     args = parser.parse_args()
     args.fn(args)
 

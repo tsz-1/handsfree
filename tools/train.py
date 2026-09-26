@@ -46,13 +46,14 @@ def load_sessions(data_dir: Path):
 
 
 def augment(X: np.ndarray, y: np.ndarray, copies: int, rng: np.random.Generator):
-    """Random in-plane rotation (±15°) and landmark jitter, applied to wrist-relative features."""
+    """Landmark jitter plus a small rotation (features are already rotation-normalized, so
+    this only models noise in the palm-axis estimate)."""
     if copies == 0:
         return X, y
     pts = X.reshape(len(X), 21, 2)
     out = [X]
     for _ in range(copies):
-        theta = np.deg2rad(rng.uniform(-15, 15, size=len(X)))
+        theta = np.deg2rad(rng.uniform(-5, 5, size=len(X)))
         c, s = np.cos(theta), np.sin(theta)
         rot = np.stack([np.stack([c, -s], -1), np.stack([s, c], -1)], -2)  # (N, 2, 2)
         aug = np.einsum("nij,nkj->nki", rot, pts) + rng.normal(0, 0.02, pts.shape)
@@ -185,7 +186,7 @@ def main():
     Xa, ya = augment(X, y, args.augment, np.random.default_rng(args.seed))
     final = build(best).fit(Xa, ya)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"pipeline": final, "labels": list(final.classes_),
+    joblib.dump({"pipeline": final, "labels": [str(c) for c in final.classes_],
                  "feature_version": FEATURE_VERSION, "model": best}, args.out)
     print(f"Saved {best} to {args.out}")
 

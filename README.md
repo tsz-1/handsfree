@@ -48,6 +48,8 @@ moving, half out of frame, or doing a mouse gesture.
 Bindings accept `keys: [...]` (any pyautogui hotkey), `media: play|next|previous|mute|volume_up|volume_down`,
 or `action: toggle_pause`.
 
+![Pose shortcuts demo](assets/shortcuts.gif)
+
 ## Quick start
 
 ```bash
@@ -64,6 +66,7 @@ Windows/Linux through pyautogui but is untested there; media keys and click-coun
 use macOS APIs.
 
 Tuning guide (Chinese): [docs/TUNING.zh-CN.md](docs/TUNING.zh-CN.md).
+Design notes explaining each decision with numbers (Chinese): [docs/DESIGN.zh-CN.md](docs/DESIGN.zh-CN.md).
 
 ### Train your own pose shortcuts
 

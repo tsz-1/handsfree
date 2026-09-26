@@ -97,11 +97,22 @@ def draw_overlay(frame, cfg: Config, hand: Hand | None, state: GestureState, fps
     cv2.putText(frame, f"FPS: {fps:.0f}", (20, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, GREEN, 2)
 
 
-def draw_shortcut_hud(frame, label: str | None, conf: float, progress: float, paused: bool):
+def describe_binding(binding: dict) -> str:
+    if "action" in binding:
+        return binding["action"]
+    if "media" in binding:
+        return f"media {binding['media']}"
+    return "+".join(str(k) for k in binding.get("keys", []))
+
+
+def draw_shortcut_hud(frame, label: str | None, conf: float, progress: float, paused: bool,
+                      fired: str | None = None):
     h, w = frame.shape[:2]
     if label is not None:
         text = f"Gesture: {label} {conf:.2f}"
         cv2.putText(frame, text, (w - 300, h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, WHITE, 2)
+    if fired:
+        cv2.putText(frame, fired, (w - 300, h - 65), cv2.FONT_HERSHEY_SIMPLEX, 0.7, GREEN, 2)
     if progress > 0:
         x0, y0 = w - 300, h - 45
         cv2.rectangle(frame, (x0, y0), (x0 + 200, y0 + 10), GRAY, 1)
@@ -163,8 +174,10 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
     fps, last_t = 0.0, time.perf_counter()
     last_mode = Mode.IDLE
     paused = False
-    print("HandsFree running. Press 'q' in the preview window to quit; "
-          "press 'n' right after a false shortcut trigger to save it as a 'none' example.")
+    fired: tuple[str, float] | None = None
+    print("HandsFree running. Press 'q' in the preview window to quit.")
+    print("Press 'n' right after a shortcut fired when you were NOT making that gesture "
+          "(a false trigger) to save it as a 'none' example. Don't press it for correct ones.")
     if dry_run:
         print("Dry run: gestures are recognized but the mouse is not controlled.")
     try:
@@ -204,6 +217,7 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
                     print(f"[{now:9.3f}] shortcut {event.gesture}: {event.binding}")
             for event in events:
                 paused = run_shortcut(event, dry_run, paused)
+                fired = (f"{event.gesture} -> {describe_binding(event.binding)}", now)
             if not dry_run and not paused:
                 mouse.execute(intents, now)
 
@@ -214,7 +228,8 @@ def run(cfg: Config, dry_run: bool = False, verbose: bool = False):
 
             if cfg.ui.show_window:
                 draw_overlay(frame, cfg, hand, gestures.state, fps)
-                draw_shortcut_hud(frame, label, conf, shortcuts.progress(now), paused)
+                recent = fired[0] if fired and now - fired[1] < 1.5 else None
+                draw_shortcut_hud(frame, label, conf, shortcuts.progress(now), paused, recent)
                 cv2.imshow(WINDOW, frame)
                 if cfg.ui.always_on_top:
                     cv2.setWindowProperty(WINDOW, cv2.WND_PROP_TOPMOST, 1)

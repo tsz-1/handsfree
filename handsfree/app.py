@@ -12,11 +12,23 @@ WINDOW = "HandsFree"
 MAGENTA, GREEN, WHITE = (255, 0, 255), (0, 255, 0), (255, 255, 255)
 
 
-def open_camera(cfg: Config) -> cv2.VideoCapture:
-    cap = cv2.VideoCapture(cfg.camera.index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.camera.width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.camera.height)
-    return cap
+def open_camera(cfg: Config, max_index: int = 4) -> cv2.VideoCapture:
+    candidates = [cfg.camera.index] + [i for i in range(max_index) if i != cfg.camera.index]
+    for index in candidates:
+        cap = cv2.VideoCapture(index)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.camera.width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.camera.height)
+            ok, _ = cap.read()
+            if ok:
+                if index != cfg.camera.index:
+                    print(f"Camera {cfg.camera.index} unavailable, using camera {index} instead.")
+                return cap
+        cap.release()
+    raise RuntimeError(
+        f"No working camera found (tried indices {candidates}). On macOS, allow Camera access "
+        "for your terminal app in System Settings → Privacy & Security → Camera, then restart it."
+    )
 
 
 def draw_overlay(frame, cfg: Config, hand: Hand | None, state: GestureState, fps: float):

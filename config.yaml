@@ -1,5 +1,5 @@
 camera:
-  index: 1          # 0 = built-in camera on most Macs; the prototype used 1
+  index: 0          # Falls back to other indices if this one can't be opened
   width: 640
   height: 480
   mirror: true

@@ -47,7 +47,7 @@ handsfree/
 │   ├── train.py                # 训练并输出准确率、混淆矩阵
 │   └── benchmark.py            # 抖动 / FPS / 延迟
 ├── tests/                      # 滤波器和状态机的单元测试
-└── assets/demo.gif
+└── assets/                 # handfree_1/2/3.gif
 ```
 
 ## 三天计划

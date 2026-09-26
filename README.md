@@ -5,7 +5,9 @@
 Touchless computer control with a regular webcam: move, click, drag and scroll with one hand,
 and bind static hand poses to shortcuts with a classifier trained on your own recordings.
 
-![Demo](assets/demo.gif)
+Move, click, and drag.
+
+![Move, click, and drag](assets/handfree_1.gif)
 
 Python · MediaPipe Hand Landmarker · OpenCV · scikit-learn · pyautogui/Quartz
 
@@ -48,7 +50,13 @@ moving, half out of frame, or doing a mouse gesture.
 Bindings accept `keys: [...]` (any pyautogui hotkey), `media: play|next|previous|mute|volume_up|volume_down`,
 or `action: toggle_pause`.
 
-![Pose shortcuts demo](assets/shortcuts.gif)
+Thumbs up plays or pauses media; a fist pauses and resumes control.
+
+![Play, pause, and resume](assets/handfree_2.gif)
+
+The rock pose takes a screenshot.
+
+![Screenshot](assets/handfree_3.gif)
 
 ## Quick start
 

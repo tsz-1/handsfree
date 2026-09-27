@@ -1,6 +1,6 @@
 # HandsFree
 
-[![CI](https://github.com/OWNER/handsfree/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/handsfree/actions/workflows/ci.yml)
+[![CI](https://github.com/tsz-1/handsfree/actions/workflows/ci.yml/badge.svg)](https://github.com/tsz-1/handsfree/actions/workflows/ci.yml)
 
 Touchless computer control with a regular webcam: move, click, drag and scroll with one hand,
 and bind static hand poses to shortcuts with a classifier trained on your own recordings.

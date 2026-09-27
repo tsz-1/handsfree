@@ -21,7 +21,7 @@ project is about fixing each one properly:
 | --- | --- |
 | A held pinch fires a click every frame | Gesture **state machine**: click on release, drag if held, one event per gesture |
 | The pinch threshold is in pixels, so it only works at one distance from the camera | Thresholds in **palm-length units** with **hysteresis** (enter 0.30, exit 0.40) |
-| Fixed exponential smoothing: either jittery or laggy | **One Euro filter**: heavy smoothing at rest, near-zero lag when moving (see benchmark) |
+| Fixed exponential smoothing: either jittery or laggy | **One Euro filter**: heavy smoothing at rest; at 1800 px/s it lags 22 px, versus 420 px for fixed smoothing (see benchmark) |
 | Closing the pinch drags the fingertip, so clicks land off-target | Click is placed where the cursor was **150 ms before** the pinch closed |
 
 On top of that, a small, honest ML component: a per-user static-pose classifier evaluated
@@ -119,7 +119,7 @@ Measured with `tools/benchmark.py` on an Apple Silicon MacBook, built-in camera 
 1710×1107 screen, MediaPipe on CPU. `tools/plot_benchmark.py` re-runs the smoothing comparison
 offline on the recorded trajectory.
 
-**Per-frame latency** (598 frames, 47.5 FPS end-to-end; camera capture is the bottleneck):
+**Per-frame latency** (598 frames). 47.5 FPS is the throughput of camera capture + detection + gesture logic only; drawing the preview and delivering the mouse event to the OS are not included. Camera capture is the bottleneck:
 
 | Stage | p50 | p95 |
 | --- | --- | --- |
@@ -140,8 +140,9 @@ computed synthetically with the same filter code.
 
 ![Jitter vs lag](reports/smoothing_tradeoff.png)
 
-Sweeping both filters shows One Euro dominates: for the same jitter (≈4.4 px) the exponential
-filter lags 180 px vs 67 px, and for the same lag (≈30 px) it jitters 5.7 px vs 5.1 px. The
+On this recorded hold and a synthetic constant-speed target, One Euro is ahead of exponential
+smoothing: at about 4.4 px of jitter the exponential filter lags 180 px and One Euro lags 67 px;
+at about 30 px of lag the exponential filter jitters 5.7 px and One Euro jitters 5.1 px. The
 shipped `beta` sits at the low-lag end on purpose; a hand held in the air has real tremor of
 several pixels per frame, and hiding all of it costs responsiveness.
 
